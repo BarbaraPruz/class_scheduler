@@ -123,15 +123,14 @@ class User < ActiveRecord::Base
   # cities
   def self.cities
     # all cities will contain nil and "" city names
-    all_cities = User.where(active: true).distinct.pluck(:city, :state)
-
+    all_cities = User.active.distinct.pluck("city","state")
     known_cities = []
     unknown_cities = []
     all_cities.each do |cs|
-      city = cs[0]
-      state = cs[1]
+      city = cs[0]&.downcase 
+      state = cs[1]&.downcase
       city_item = {
-        name: city,
+        name: city,  
         client_count: city_client_count(city, state),
         volunteer_count: city_volunteer_count(city, state),
         coordinates: city_coordinates(city, state)
@@ -142,8 +141,7 @@ class User < ActiveRecord::Base
         known_cities.push city_item
       end
     end
-
-    nyc = known_cities.find_index { |c| c[:name] == 'New York' }
+    nyc = known_cities.find_index { |c| c[:name] == 'new york' }
     unknown_cities.each do |u|
       known_cities[nyc][:client_count] += u[:client_count]
       known_cities[nyc][:volunteer_count] += u[:volunteer_count]
@@ -154,14 +152,16 @@ class User < ActiveRecord::Base
   private
 
   def self.city_client_count(city, state)
-    User.select('roles.name')
-        .where(active: true, city: city, state: state)
+     User.select('roles.name')
+        .active
+        .where('lower(city) = ? AND lower(state) = ?', city, state)
         .joins(:roles).where("roles.name = 'Client'").count
   end
 
   def self.city_volunteer_count(city, state)
-    User.select('roles.name')
-        .where(active: true, city: city, state: state)
+    User.select('roles.name')    
+        .active
+        .where('lower(city) = ? AND lower(state) = ?', city, state) 
         .joins(:roles).where("roles.name = 'Volunteer'").count
   end
 
@@ -169,7 +169,7 @@ class User < ActiveRecord::Base
     # Same city may show up multiple times with different
     # lat/longs (or none at all!). Just picking 1st non nil.
     # If all have nil lat/long, coordinates will be []
-    coordinates = User.where(city: city, state: state)
+    coordinates = User.where('lower(city) = ? AND lower(state) = ?', city, state)
                       .where.not(latitude: nil)
                       .limit(1)
                       .pluck('latitude', 'longitude')
